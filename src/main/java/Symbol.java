@@ -31,7 +31,11 @@ public class Symbol {
         ableitungsRegeln.add(regel);
     }
 
-    public Set<String> firstMenge(List<Symbol> regeln) {
+    public void addRegeln(List<String> regeln) {
+        ableitungsRegeln.addAll(regeln);
+    }
+
+    public Set<String> firstMenge(Operator operator) {
         if (art == Art.TERMINAL) {
             return new HashSet(Collections.singletonList(zustand));
         }
@@ -51,20 +55,18 @@ public class Symbol {
                     //startet mit einem Literal
                     if (startWithLit.matcher(letter).matches()) {
                         String lit = letter;
-                        //Durchsuche alle Regeln nach Literal
-                        for (Symbol symbol : regeln) {
-                            if (!symbol.equals(this) && symbol.getZustand().equals(lit)) {
-                                Set<String> litFirstMenge = symbol.firstMenge(regeln);
-                                for (String firstString : litFirstMenge) {
-                                    if (firstString.equals(EPSILON)) {
-                                        isEpsilon = true;
-                                    }
-                                }
-                                litFirstMenge.remove(EPSILON);
-                                terminale.addAll(litFirstMenge);
-                                break;
+                        if (lit.equals(zustand)) {
+                            continue;
+                        }
+                        Symbol symbolVonRegel = operator.searchRegel(lit);
+                        Set<String> litFirstMenge = symbolVonRegel.firstMenge(operator);
+                        for (String firstString : litFirstMenge) {
+                            if (firstString.equals(EPSILON)) {
+                                isEpsilon = true;
                             }
                         }
+                        litFirstMenge.remove(EPSILON);
+                        terminale.addAll(litFirstMenge);
                         if (isEpsilon) {
                             count++;
                             continue;
@@ -86,30 +88,33 @@ public class Symbol {
     }
 
     //todo jb was gegen unendlich oft reingehen tun
-    public Set<String> followMenge(List<Symbol> regeln) {
+    public Set<String> followMenge(Operator operator, List<String> besuchteZustände) {
         Set<String> retFollowMenge = new HashSet<>();
-        for (Symbol regel : regeln) {
+        besuchteZustände.add(zustand);
+        for (Symbol regel : operator.getZustaende()) {
             List<String> ableitungsRegelnMitSymbol = regel.getAbleitungsRegelnMitSymbol(zustand);
             for (String arms : ableitungsRegelnMitSymbol) {
+                String[] literals = arms.split("");
                 for (int i = arms.indexOf(zustand) + 1; i < arms.length(); i++) {
-                    String symbol = arms.split("")[i];
-                    for (Symbol regelSuche : regeln) {
-                        if (regelSuche.getZustand().equals(symbol)) {
-                            Set<String> firstMenge = regelSuche.firstMenge(regeln);
-                            if (firstMenge.contains(EPSILON)) {
-                                Set<String> followMenge = new HashSet<>();
-                                //todo jb vielleicht hier schon getan ??
-                                if (!this.equals(regelSuche)) {
-                                    followMenge = regelSuche.followMenge(regeln);
-                                }
-                                firstMenge.remove(EPSILON);
-                                firstMenge.addAll(followMenge);
-                            }
-                            retFollowMenge.addAll(firstMenge);
-                        }
+                    String symbol = literals[i];
+                    if (besuchteZustände.contains(symbol)) {
+                        continue;
                     }
+                    Symbol symbolVomLiteral = operator.searchRegel(symbol);
+                    Set<String> firstMenge = symbolVomLiteral.firstMenge(operator);
+                    if (firstMenge.contains(EPSILON)) {
+                        retFollowMenge.addAll(symbolVomLiteral.followMenge(operator, besuchteZustände));
+                    }
+                    retFollowMenge.addAll(firstMenge);
+                    break;
                 }
             }
+        }
+        if (retFollowMenge.size() == 0) {
+            return Collections.singleton(EPSILON);
+        }
+        if (retFollowMenge.size() > 1) {
+            retFollowMenge.remove(EPSILON);
         }
         return retFollowMenge;
     }
